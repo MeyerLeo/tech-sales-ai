@@ -112,12 +112,17 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         );
         console.log('WebSocket connection result:', connected);
         
-        // If connection successful and this is a new chat (no messages), send the initial message
-        if (connected && currentChat.messages.length === 0) {
+        // Send the initial message only if this chat was just created
+        if (connected && currentChat.isNew) {
           // Add a small delay to ensure connection is fully established
           setTimeout(async () => {
             console.log('Sending initial "Create Proposal" message');
             await websocketService.sendMessage("Create Proposal");
+
+            // Mark the chat as no longer new so this doesn't fire again
+            const updatedChat = { ...currentChat, isNew: false };
+            setCurrentChat(updatedChat);
+            setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
           }, 500);
         }
       }
@@ -158,7 +163,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       messages: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      context: client.description
+      context: client.description,
+      // Mark this chat as new so we know to send the
+      // initial "Create Proposal" message only once
+      isNew: true
     };
     
     setChats([newChat, ...chats]);
@@ -190,7 +198,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           messages: [],
           createdAt: proposal.createdAt,
           updatedAt: proposal.createdAt,
-          context: ''
+          context: '',
+          // These proposals already exist on the server, so we
+          // shouldn't send the "Create Proposal" message again
+          isNew: false
         }));
         
         // If clientName is provided, only replace proposals for that client
