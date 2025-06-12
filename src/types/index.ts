@@ -31,6 +31,13 @@ export interface Chat {
   clientId?: string;
   clientName?: string;
   clientDescription?: string;
+  /**
+   * Indicates whether this proposal has just been created locally and
+   * still needs to be created on the server. If true, the application
+   * will send the "Create Proposal" message once and then toggle this
+   * flag off so it isn't sent again when reopening the chat.
+   */
+  isNew?: boolean;
 }
 
 export interface ProposalFormData {
