@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Chat, Message, ProposalFormData } from '../types';
 import { useClient } from './ClientContext';
 import websocketService from '../services/websocketService';
-import { fetchProposals, Proposal } from '../services/proposalService';
+import { fetchProposals } from '../services/proposalService';
 
 interface ChatContextType {
   chats: Chat[];
@@ -29,6 +29,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const { getClient } = useClient();
 
   // Load all proposals on initial mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Only load proposals once on initial mount
     const initialLoad = async () => {
