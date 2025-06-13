@@ -125,11 +125,18 @@ class WebSocketService {
     }
 
     try {
+      // Get the current session to get the email from ID token
+      const session = await Auth.currentSession();
+      const idToken = session.getIdToken();
+      const userEmail = idToken.payload.email || "anonymous@user.com";
+      console.log('Using email from ID token:', userEmail);
+      
       const payload = {
         action: "message",
         clientName: this.clientName || "",
         proposalName: this.proposalName || "",
-        body: message
+        body: message,
+        createdBy: userEmail
       };
       
       console.log('Sending message with payload:', payload);

@@ -4,6 +4,7 @@ import { Chat, Message, ProposalFormData } from '../types';
 import { useClient } from './ClientContext';
 import websocketService from '../services/websocketService';
 import { fetchProposals } from '../services/proposalService';
+import { fetchChatMessages, ChatMessage } from '../services/messageService';
 
 interface ChatContextType {
   chats: Chat[];
@@ -14,6 +15,7 @@ interface ChatContextType {
   sendMessage: (content: string) => void;
   isConnected: boolean;
   loadProposals: (clientName?: string) => Promise<void>;
+  loadChatMessages: (clientName: string, proposalName: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -28,7 +30,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const { getClient } = useClient();
 
-  // Load all proposals on initial mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Only load proposals once on initial mount
@@ -105,6 +106,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     const connectToWebSocket = async () => {
       if (currentChat && currentChat.clientName) {
         console.log('Connecting to WebSocket for chat:', currentChat.title);
+        console.log('Current chat isNew flag:', currentChat.isNew);
         
         // Wait for connection to be established
         const connected = await websocketService.connect(
@@ -114,17 +116,21 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         console.log('WebSocket connection result:', connected);
         
         // Send the initial message only if this chat was just created
-        if (connected && currentChat.isNew) {
+        if (connected && currentChat.isNew === true) {
           // Add a small delay to ensure connection is fully established
           setTimeout(async () => {
             console.log('Sending initial "Create Proposal" message');
-            await websocketService.sendMessage("Create Proposal");
+            const sent = await websocketService.sendMessage("Create Proposal");
+            console.log('Initial message sent result:', sent);
 
             // Mark the chat as no longer new so this doesn't fire again
             const updatedChat = { ...currentChat, isNew: false };
             setCurrentChat(updatedChat);
             setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
-          }, 500);
+          }, 1000); // Increased delay to ensure connection is stable
+        } else if (connected && currentChat.messages.length === 0) {
+          // If not a new chat but has no messages, load existing messages
+          await loadChatMessages(currentChat.clientName, currentChat.title);
         }
       }
     };
@@ -170,8 +176,12 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       isNew: true
     };
     
-    setChats([newChat, ...chats]);
+    console.log('Creating new chat with isNew flag:', newChat.isNew);
+    
+    // First set the current chat to ensure the WebSocket effect picks it up
     setCurrentChat(newChat);
+    // Then update the chats array
+    setChats(prevChats => [newChat, ...prevChats]);
   };
 
   const deleteChat = (id: string) => {
@@ -285,6 +295,40 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     }
   };
 
+  const loadChatMessages = async (clientName: string, proposalName: string) => {
+    try {
+      if (!currentChat) return;
+      
+      const chatMessages = await fetchChatMessages(clientName, proposalName);
+      console.log('Fetched chat messages:', chatMessages);
+      
+      if (chatMessages.length > 0) {
+        // Convert API messages to chat messages
+        const messages: Message[] = chatMessages.map(msg => ({
+          id: uuidv4(),
+          content: msg.message,
+          timestamp: msg.createdAt,
+          sender: msg.createdBy === 'bot' ? 'ai' : 'user'
+        }));
+        
+        // Update current chat with messages
+        const updatedChat: Chat = {
+          ...currentChat,
+          messages: messages,
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Update state
+        setCurrentChat(updatedChat);
+        setChats(chats.map(chat => 
+          chat.id === currentChat.id ? updatedChat : chat
+        ));
+      }
+    } catch (error) {
+      console.error('Error loading chat messages:', error);
+    }
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -295,7 +339,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         deleteChat,
         sendMessage,
         isConnected,
-        loadProposals
+        loadProposals,
+        loadChatMessages
       }}
     >
       {children}
